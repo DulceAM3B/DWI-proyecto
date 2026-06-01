@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MaquilaControl - Landing Page</title>
+    <style>
+        /* --- VARIABLES GLOBALES --- */
+        :root {
+            --primary-text: #1a1a1a;
+            --secondary-text: #595959;
+            --background-light: #fdfdfd;
+            --card-dark: #5c5f6a;
+            --badge-bg: #e6e8eb;
+            --badge-text: #6b7280;
+            --font-main: 'Inter', system-ui, -apple-system, sans-serif;
+        }
+
+        /* --- RESET Y ESTILOS BASE --- */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: var(--font-main);
+            color: var(--primary-text);
+            background-color: var(--background-light);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        /* Utilidades */
+        .badge {
+            display: inline-block;
+            background-color: var(--badge-bg);
+            color: var(--badge-text);
+            font-size: 0.75rem;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            padding: 6px 12px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+
+        h1, h2, h3 {
+            font-weight: 600;
+            line-height: 1.2;
+            margin-bottom: 20px;
+            color: var(--primary-text);
+        }
+
+        p {
+            color: var(--secondary-text);
+            margin-bottom: 20px;
+        }
+
+        /* --- HERO SECTION (Sección Principal) --- */
+        .hero {
+            
+            background-image: linear-gradient(rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.95)), url('https://www.transparenttextures.com/patterns/cubes.png');
+            background-size: cover;
+            background-position: center;
+            padding: 120px 0 80px;
+            text-align: center;
+            border-bottom: 1px solid #eee;
+        }
+
+        .hero h1 {
+            font-size: 3rem;
+            max-width: 800px;
+            margin: 0 auto 20px;
+        }
+
+        .hero p {
+            font-size: 1.1rem;
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        /* --- SECCIÓN EL PROBLEMA --- */
+        .problem-section {
+            padding: 80px 0;
+        }
+
+        .problem-intro {
+            max-width: 700px;
+            margin-bottom: 60px;
+        }
+
+        .problem-intro h2 {
+            font-size: 2.2rem;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 40px;
+        }
+
+        .feature-card h3 {
+            font-size: 1.2rem;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .feature-icon {
+            font-size: 1.5rem;
+            color: var(--primary-text);
+        }
+
+        /* --- SECCIÓN EL COSTO REAL --- */
+        .cost-section {
+            padding: 80px 0;
+            background-color: #fafafa;
+        }
+
+        .cost-intro h2 {
+            font-size: 2.2rem;
+            margin-bottom: 50px;
+        }
+
+        .cost-split {
+            display: flex;
+            gap: 40px;
+            align-items: flex-start;
+        }
+
+        /* Tarjeta Oscura */
+        .dark-card {
+            flex: 1;
+            background-color: var(--card-dark);
+            color: white;
+            padding: 40px;
+            border-radius: 8px;
+        }
+
+        .dark-card h3 {
+            color: white;
+            font-size: 1.3rem;
+        }
+
+        .dark-card p {
+            color: #e2e2e2;
+            margin: 0;
+        }
+
+        /* Lista de Impacto */
+        .impact-list {
+            flex: 1;
+        }
+
+        .impact-list h3 {
+            font-size: 1.3rem;
+        }
+
+        .impact-list ul {
+            list-style-position: inside;
+            color: var(--secondary-text);
+        }
+
+        .impact-list li {
+            margin-bottom: 15px;
+            line-height: 1.5;
+        }
+
+        /* --- SECCIÓN RESULTADOS --- */
+        .results-section {
+            padding: 100px 0;
+            background-color: var(--background-light);
+        }
+
+        .results-header {
+            text-align: center;
+            max-width: 800px;
+            margin: 0 auto 60px auto;
+        }
+
+        .results-header h2 {
+            font-size: 2.2rem;
+            margin-bottom: 20px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 60px 40px; 
+        }
+
+        .stat-card {
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 3.8rem;
+            font-weight: 700;
+            color: #475569; /* Un tono gris azulado similar al de la captura */
+            line-height: 1;
+            margin-bottom: 15px;
+            letter-spacing: -1px;
+        }
+
+        .stat-card h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .stat-card p {
+            font-size: 0.95rem;
+            margin: 0 auto;
+            max-width: 320px; /* Controla el ancho del párrafo para que se vea como en la imagen */
+        }
+
+        /* --- RESPONSIVE --- */
+        @media (max-width: 768px) {
+            .hero h1 { font-size: 2.2rem; }
+            .cost-split { flex-direction: column; }
+            .stats-grid { grid-template-columns: 1fr; gap: 40px; }
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <section class="hero">
+        <div class="container">
+            <h1>Detén el pago de piezas fantasma en tu maquila al instante.</h1>
+            <p>Un sistema de validación matemática en tiempo real que asegura la integridad de tus nóminas por destajo y elimina los conflictos en las líneas de producción.</p>
+        </div>
+    </section>
+
+    <section class="problem-section">
+        <div class="container">
+            <div class="problem-intro">
+                <span class="badge">El Problema</span>
+                <h2>Tres fugas silenciosas que drenan tu rentabilidad cada semana</h2>
+                <p>Las maquilas por destajo operan bajo una presión constante: la suma de piezas reportadas por los trabajadores rara vez coincide con el total real del lote. Este descuadre sistemático genera pérdidas económicas directas...</p>
+            </div>
+
+            <div class="features-grid">
+                <div class="feature-card">
+                    <h3><span class="feature-icon"></span> Descuadre de Lotes</h3>
+                    <p>La suma de piezas reportadas por los operadores excede sistemáticamente el total real entregado al lote, generando sobrepagos inevitables.</p>
+                </div>
+                <div class="feature-card">
+                    <h3><span class="feature-icon"></span> Fuga de Capital</h3>
+                    <p>La falta de integridad en los datos produce errores costosos en nómina y pagos en exceso que erosionan el margen operativo semana a semana.</p>
+                </div>
+                <div class="feature-card">
+                    <h3><span class="feature-icon"></span> Tensión Laboral</h3>
+                    <p>Las inconsistencias en los registros generan reclamos constantes, desconfianza y conflictos que afectan el clima y la productividad de la planta.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="cost-section">
+        <div class="container">
+            <div class="cost-intro">
+                <span class="badge">El Costo Real</span>
+                <h2>¿Cuánto te cuesta realmente la falta de control?</h2>
+            </div>
+            
+            <div class="cost-split">
+                <div class="dark-card">
+                    <h3>El escenario típico</h3>
+                    <p>Sin validación matemática, cada lote procesado lleva un margen de error invisible. Los reportes individuales se acumulan sin filtro, y el total pagado supera al total producido. El problema no se detecta hasta que la nómina ya salió.</p>
+                </div>
+                <div class="impact-list">
+                    <h3>El impacto acumulado</h3>
+                    <ul>
+                        <li>Piezas fantasma pagadas semana a semana sin ningún control</li>
+                        <li>Horas de revisión manual para intentar cuadrar lotes</li>
+                        <li>Conflictos con operadores que reclaman su producción</li>
+                        <li>Decisiones tomadas con datos inconsistentes y no confiables</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="results-section">
+        <div class="container">
+            <div class="results-header">
+                <span class="badge">Resultados</span>
+                <h2>Lo que logran las plantas que adoptan MaquilaControl</h2>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-number">100%</div>
+                    <h3>Validación automática</h3>
+                    <p>Cada registro pasa por validación matemática antes de ser aceptado en el sistema</p>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-number">0</div>
+                    <h3>Piezas fantasma</h3>
+                    <p>El sistema bloquea automáticamente cualquier reporte que exceda el total real del lote</p>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-number">24/7</div>
+                    <h3>Disponibilidad del sistema</h3>
+                    <p>Acceso continuo desde cualquier dispositivo en planta u oficina</p>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-number">&lt;1h</div> <h3>Configuración inicial</h3>
+                    <p>Puesta en marcha rápida sin interrumpir la operación actual de la planta</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+</body>
+</html>
