@@ -46,6 +46,6 @@ DWI-proyecto/
 | Nombre | GitHub |
 |---|---|
 | Dulce Acevedo Miguel | [@DulceAM3B](https://github.com/DulceAM3B) |
-| José Ricardo Cruz Aguilar | — |[@xltsignosis](https://github.com/xltsignosis)|
-| Carlos Andres Arriaga Marquez | [@chocotzi] (https://github.com/chocotzi)|
-| Kevin Ricardo Simón Álfaro | — |
+| José Ricardo Cruz Aguilar | [@5B-DAM](https://github.com/5B-DAM) |
+| Carlos Andres Arriaga Marquez | [@Chocotzi](https://github.com/Chocotzi) |
+| Kevin Ricardo Simón Álfaro | [@Kevin0182](https://github.com/Kevin0182) |
