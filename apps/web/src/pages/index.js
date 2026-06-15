@@ -50,8 +50,8 @@ export default function Login() {
       }, 1000);
       // -----------------------------------------------------------
 
-    } catch (err) {
-      setError(err.message);
+    } catch (e) {
+      setError(e.message);
       setCargando(false);
     }
   };
