@@ -1,0 +1,23 @@
+services:
+  api:
+    build:
+      context: ./apps/api
+    container_name: maquila-api
+    ports:
+      - "3001:3001"
+    env_file:
+      - ./apps/api/.env 
+    environment:
+      PORT: 3001
+
+  web:
+    build:
+      context: ./apps/web
+    container_name: maquila-web
+    depends_on:
+      - api
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:3001
+    command: npm run dev -- -H 0.0.0.0
