@@ -1,7 +1,9 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const { createClient } = require('@supabase/supabase-js');
+const PDFDocument = require('pdfkit');
+const ExcelJS = require('exceljs');
+const supabase = require('./supabaseClient');
 const { validarRegistro } = require('./validaciones');
 
 const app = express();
@@ -149,55 +151,43 @@ async function consultarLotePorReferencia(referencia) {
         .single();
 }
 
-// Endpoint de Login
+// ---------------------------------------------------------------------------
+// Endpoints — Auth
+// ---------------------------------------------------------------------------
+
 app.post('/api/auth/login', async (req, res) => {
     const { email, password } = req.body;
 
     try {
-        console.log("DEBUG LOGIN:", { email });
-
-        // Validar en Supabase Auth
         const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
             email,
             password,
         });
 
-        if (authError) {
-            console.error("FALLO EN AUTH:", authError.message);
-            return res.status(401).json({ error: 'Credenciales incorrectas' });
-        }
+        if (authError) return res.status(401).json({ error: 'Credenciales incorrectas' });
 
-        // Buscar rol en tabla 'usuarios'
-        console.log("Buscando usuario en tabla 'usuarios' con email:", email);
         const { data: usuarios, error: dbError } = await supabase
             .from('usuarios')
             .select('id, nombre, rol')
-            .eq('email', email.trim()); // Quitamos .single() temporalmente
+            .eq('email', email.trim());
 
         if (dbError || !usuarios || usuarios.length === 0) {
-            console.error("FALLO EN TABLA USUARIOS:", dbError);
             return res.status(404).json({ error: 'Usuario no encontrado' });
         }
 
-        // Tomamos el primer elemento del arreglo
-        const usuario = usuarios[0];
-
-        res.json({
-            token: authData.session.access_token,
-            usuario: usuario
-        });
-
+        res.json({ token: authData.session.access_token, usuario: usuarios[0] });
     } catch (err) {
-        console.error("ERROR INTERNO:", err);
         res.status(500).json({ error: 'Error interno del servidor' });
     }
 });
 
-// Endpoint para dashboard de lotes
+// ---------------------------------------------------------------------------
+// Endpoints — Lotes
+// ---------------------------------------------------------------------------
+
 app.get('/api/lotes/estado', async (req, res) => {
     try {
         const { data: lotes, error } = await consultarLotes();
-
         if (error) return res.status(500).json({ error: 'Error al consultar lotes' });
         res.json((lotes || []).map(formatearEstadoLote));
     } catch (err) {
@@ -205,11 +195,9 @@ app.get('/api/lotes/estado', async (req, res) => {
     }
 });
 
-// Endpoint para estado de lote
 app.get('/api/lotes/estado/:id', async (req, res) => {
     try {
         const { data: lote, error } = await consultarLotePorReferencia(req.params.id);
-
         if (error || !lote) return res.status(404).json({ error: 'Lote no encontrado' });
         res.json(formatearEstadoLote(lote));
     } catch (err) {
@@ -217,16 +205,12 @@ app.get('/api/lotes/estado/:id', async (req, res) => {
     }
 });
 
-// Endpoint para crear lotes
 app.post('/api/lotes', async (req, res) => {
     const { codigo_lote, total_piezas_requeridas } = req.body;
     const total = Number(total_piezas_requeridas);
     const codigo = String(codigo_lote || '').trim();
 
-    if (!codigo) {
-        return res.status(400).json({ error: 'El código del lote es obligatorio' });
-    }
-
+    if (!codigo) return res.status(400).json({ error: 'El código del lote es obligatorio' });
     if (!Number.isInteger(total) || total <= 0) {
         return res.status(400).json({ error: 'El total de piezas debe ser un entero mayor a cero' });
     }
@@ -239,10 +223,7 @@ app.post('/api/lotes', async (req, res) => {
         });
 
         if (error) {
-            if (error.code === '23505') {
-                return res.status(409).json({ error: 'Ya existe un lote con ese código' });
-            }
-
+            if (error.code === '23505') return res.status(409).json({ error: 'Ya existe un lote con ese código' });
             return res.status(500).json({ error: 'Error al crear el lote' });
         }
 
@@ -252,7 +233,10 @@ app.post('/api/lotes', async (req, res) => {
     }
 });
 
-// Endpoint para registrar producción
+// ---------------------------------------------------------------------------
+// Endpoints — Producción
+// ---------------------------------------------------------------------------
+
 app.post('/api/produccion/registrar', async (req, res) => {
     const { lote_id, usuario_id, piezas_nuevas } = req.body;
     const piezasNuevas = Number(piezas_nuevas);
@@ -263,7 +247,6 @@ app.post('/api/produccion/registrar', async (req, res) => {
         }
 
         const { data: lote, error: errLote } = await consultarLotePorReferencia(lote_id);
-
         if (errLote || !lote) return res.status(404).json({ error: 'Lote no encontrado' });
 
         if ((lote.estado || '').toLowerCase() === 'cerrado') {
@@ -280,9 +263,8 @@ app.post('/api/produccion/registrar', async (req, res) => {
             return res.status(400).json({ error: 'Registro rechazado: datos inválidos.' });
         }
 
-        if (validacion.excede) {
-            return res.status(400).json({ error: 'Registro rechazado: Supera el límite.' });
-        }
+        if (!validacion.valido) return res.status(400).json({ error: 'Registro rechazado: datos inválidos.' });
+        if (validacion.excede) return res.status(400).json({ error: 'Registro rechazado: Supera el límite.' });
 
         const { error: errInsert } = await supabase.from('registros_produccion').insert([
             { lote_id: lote.id, usuario_id, piezas_reportadas: piezasNuevas }
@@ -321,7 +303,151 @@ app.post('/api/produccion/registrar', async (req, res) => {
     }
 });
 
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Servidor de MaquilaControl corriendo en http://localhost:${PORT}`);
+// ---------------------------------------------------------------------------
+// Endpoints — Nómina
+// ---------------------------------------------------------------------------
+
+app.get('/api/nomina/reporte', async (req, res) => {
+    try {
+        const auth = await verificarAuth(req, res, ['administrador', 'supervisor']);
+        if (!auth) return;
+
+        const { inicio, fin } = req.query;
+        if (!inicio || !fin) {
+            return res.status(400).json({ error: 'Parámetros inicio y fin son requeridos' });
+        }
+        if (isNaN(Date.parse(inicio)) || isNaN(Date.parse(fin))) {
+            return res.status(400).json({ error: 'Las fechas deben tener formato válido (YYYY-MM-DD)' });
+        }
+        if (new Date(inicio) > new Date(fin)) {
+            return res.status(400).json({ error: 'La fecha de inicio no puede ser posterior a la fecha fin' });
+        }
+
+        const reporte = await obtenerDatosNomina(inicio, fin);
+        res.json(reporte);
+    } catch (err) {
+        res.status(500).json({ error: err.message || 'Error al calcular el reporte de nómina' });
+    }
 });
+
+app.get('/api/nomina/historial', async (req, res) => {
+    try {
+        const auth = await verificarAuth(req, res, ['administrador', 'supervisor']);
+        if (!auth) return;
+
+        const { lote_id, usuario_id } = req.query;
+
+        let query = supabase
+            .from('registros_produccion')
+            .select('id, lote_id, usuario_id, piezas_reportadas, tipo_pieza, fecha_registro, usuarios(nombre), lotes(codigo_lote)')
+            .order('fecha_registro', { ascending: false });
+
+        if (lote_id) query = query.eq('lote_id', lote_id);
+        if (usuario_id) query = query.eq('usuario_id', usuario_id);
+
+        const { data: registros, error } = await query;
+
+        if (error) return res.status(500).json({ error: 'Error al consultar el historial' });
+
+        res.json((registros || []).map(r => ({
+            id: r.id,
+            lote_id: r.lote_id,
+            codigo_lote: r.lotes?.codigo_lote || String(r.lote_id),
+            usuario_id: r.usuario_id,
+            nombre_operador: r.usuarios?.nombre || 'Desconocido',
+            piezas_reportadas: r.piezas_reportadas,
+            tipo_pieza: r.tipo_pieza || 'sin_tipo',
+            fecha_registro: r.fecha_registro
+        })));
+    } catch (err) {
+        res.status(500).json({ error: 'Error al consultar el historial' });
+    }
+});
+
+app.post('/api/nomina/exportar', async (req, res) => {
+    try {
+        const auth = await verificarAuth(req, res, ['administrador']);
+        if (!auth) return;
+
+        const { inicio, fin, formato } = req.body;
+
+        if (!inicio || !fin) {
+            return res.status(400).json({ error: 'Parámetros inicio y fin son requeridos' });
+        }
+        if (formato !== 'pdf' && formato !== 'excel') {
+            return res.status(400).json({ error: 'Formato debe ser pdf o excel' });
+        }
+
+        const reporte = await obtenerDatosNomina(inicio, fin);
+
+        if (formato === 'pdf') {
+            const pdfBuffer = await new Promise((resolve, reject) => {
+                const doc = new PDFDocument({ margin: 50 });
+                const buffers = [];
+                doc.on('data', chunk => buffers.push(chunk));
+                doc.on('end', () => resolve(Buffer.concat(buffers)));
+                doc.on('error', reject);
+
+                doc.fontSize(18).font('Helvetica-Bold').text('Reporte de Nómina — MaquilaControl', { align: 'center' });
+                doc.moveDown();
+                doc.fontSize(11).font('Helvetica').text(`Periodo: ${inicio} al ${fin}`);
+                doc.moveDown();
+
+                reporte.forEach(op => {
+                    doc.font('Helvetica-Bold').text(op.nombre, { continued: true });
+                    doc.font('Helvetica').text(`   Piezas: ${op.piezas_totales}   Monto: ${formatMXN(op.monto_total)}`);
+                    op.detalle.forEach(d => {
+                        doc.fontSize(9).text(
+                            `  ${d.lote} | ${d.tipo_pieza} | ${d.piezas} pzs × ${formatMXN(d.tarifa)} = ${formatMXN(d.subtotal)}`,
+                            { indent: 20 }
+                        );
+                    });
+                    doc.fontSize(11).moveDown(0.5);
+                });
+
+                doc.end();
+            });
+
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `attachment; filename=nomina_${inicio}_${fin}.pdf`);
+            return res.end(pdfBuffer);
+        }
+
+        // Excel
+        const workbook = new ExcelJS.Workbook();
+        const sheet = workbook.addWorksheet('Nómina');
+
+        sheet.columns = [
+            { header: 'Operador', key: 'nombre', width: 30 },
+            { header: 'Piezas Totales', key: 'piezas_totales', width: 15 },
+            { header: 'Monto Total (MXN)', key: 'monto_total', width: 22 },
+        ];
+
+        sheet.getRow(1).font = { bold: true };
+        reporte.forEach(op => sheet.addRow({
+            nombre: op.nombre,
+            piezas_totales: op.piezas_totales,
+            monto_total: op.monto_total
+        }));
+
+        const buffer = await workbook.xlsx.writeBuffer();
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename=nomina_${inicio}_${fin}.xlsx`);
+        return res.end(Buffer.from(buffer));
+    } catch (err) {
+        res.status(500).json({ error: err.message || 'Error al exportar la nómina' });
+    }
+});
+
+// ---------------------------------------------------------------------------
+// Start
+// ---------------------------------------------------------------------------
+
+if (require.main === module) {
+    const PORT = process.env.PORT || 3001;
+    app.listen(PORT, '0.0.0.0', () => {
+        console.log(`Servidor de MaquilaControl corriendo en http://localhost:${PORT}`);
+    });
+}
+
+module.exports = app;
