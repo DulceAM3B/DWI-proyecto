@@ -7,119 +7,37 @@ const supabase = require('./supabaseClient');
 const { validarRegistro } = require('./validaciones');
 
 const app = express();
+
+const allowedOrigins = [
+    process.env.FRONTEND_URL,
+    process.env.CORS_ORIGINS,
+    'http://localhost:3000',
+    'http://127.0.0.1:3000'
+]
+    .filter(Boolean)
+    .flatMap((origin) => origin.split(','))
+    .map((origin) => origin.trim().replace(/\/$/, ''));
+
 app.use(cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin(origin, callback) {
+        if (!origin) return callback(null, true);
+        const normalizedOrigin = origin.replace(/\/$/, '');
+
+        if (allowedOrigins.includes(normalizedOrigin)) {
+            return callback(null, true);
+        }
+
+        return callback(new Error('Origen no permitido por CORS'));
+    },
     credentials: true
 }));
 app.use(express.json());
 
-// ---------------------------------------------------------------------------
-// Auth helper
-// ---------------------------------------------------------------------------
-
-async function verificarAuth(req, res, roles = []) {
-    const token = req.headers.authorization?.split(' ')[1];
-    if (!token) {
-        res.status(401).json({ error: 'Token requerido' });
-        return null;
-    }
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    if (authError || !user) {
-        res.status(401).json({ error: 'Token inválido' });
-        return null;
-    }
-
-    const { data: perfil, error: perfilError } = await supabase
-        .from('usuarios')
-        .select('rol, nombre')
-        .eq('id', user.id)
-        .single();
-
-    if (perfilError || !perfil) {
-        res.status(404).json({ error: 'Usuario no encontrado' });
-        return null;
-    }
-
-    if (roles.length > 0 && !roles.includes(perfil.rol)) {
-        res.status(403).json({ error: 'Acceso denegado' });
-        return null;
-    }
-
-    return { user, perfil };
-}
-
-// ---------------------------------------------------------------------------
-// Nómina helpers
-// ---------------------------------------------------------------------------
-
-function tarifaVigente(tarifas, tipo_pieza, fecha) {
-    const d = new Date(fecha);
-    return tarifas.find(t =>
-        t.tipo_pieza === tipo_pieza &&
-        new Date(t.fecha_inicio_vigencia) <= d &&
-        (t.fecha_fin_vigencia === null || new Date(t.fecha_fin_vigencia) >= d)
-    ) || null;
-}
-
-function calcularReporte(registros, tarifas) {
-    const porOperador = {};
-
-    for (const r of registros) {
-        const tarifa = tarifaVigente(tarifas, r.tipo_pieza, r.fecha_registro);
-        const pagoPorPieza = tarifa ? Number(tarifa.pago_por_pieza) : 0;
-        const subtotal = Math.round(r.piezas_reportadas * pagoPorPieza * 100) / 100;
-
-        if (!porOperador[r.usuario_id]) {
-            porOperador[r.usuario_id] = {
-                operador_id: r.usuario_id,
-                nombre: r.usuarios?.nombre || 'Desconocido',
-                piezas_totales: 0,
-                monto_total: 0,
-                detalle: []
-            };
-        }
-
-        const op = porOperador[r.usuario_id];
-        op.piezas_totales += r.piezas_reportadas;
-        op.monto_total = Math.round((op.monto_total + subtotal) * 100) / 100;
-        op.detalle.push({
-            lote: r.lotes?.codigo_lote || String(r.lote_id),
-            tipo_pieza: r.tipo_pieza || 'sin_tipo',
-            piezas: r.piezas_reportadas,
-            tarifa: pagoPorPieza,
-            subtotal
-        });
-    }
-
-    return Object.values(porOperador);
-}
-
-async function obtenerDatosNomina(inicio, fin) {
-    const { data: registros, error: errReg } = await supabase
-        .from('registros_produccion')
-        .select('id, lote_id, usuario_id, piezas_reportadas, tipo_pieza, fecha_registro, usuarios(nombre), lotes(codigo_lote)')
-        .gte('fecha_registro', inicio)
-        .lte('fecha_registro', `${fin}T23:59:59`);
-
-    if (errReg) throw new Error('Error al consultar registros de producción');
-
-    const { data: tarifas, error: errTar } = await supabase
-        .from('tarifas_nomina')
-        .select('tipo_pieza, pago_por_pieza, fecha_inicio_vigencia, fecha_fin_vigencia');
-
-    if (errTar) throw new Error('Error al consultar tarifas');
-
-    return calcularReporte(registros || [], tarifas || []);
-}
-
-function formatMXN(monto) {
-    return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(monto);
-}
-
-// ---------------------------------------------------------------------------
-// Lotes helpers
-// ---------------------------------------------------------------------------
+// 1. Configuración de Supabase
+const supabase = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
 function formatearEstadoLote(lote) {
     const total = Number(lote.total_piezas_requeridas || 0);
@@ -137,6 +55,10 @@ function formatearEstadoLote(lote) {
         estado: lote.estado || lote.estados_lote?.nombre || null,
         fecha_cierre: lote.fecha_cierre || null
     };
+}
+
+function getSupabaseErrorMessage(error, fallback) {
+    return error?.message || error?.details || fallback;
 }
 
 async function actualizarLoteConEstado(loteId, cambios, estado) {
@@ -320,10 +242,26 @@ app.post('/api/produccion/registrar', async (req, res) => {
     const piezasNuevas = Number(piezas_nuevas);
 
     try {
+        if (!usuario_id) {
+            return res.status(401).json({ error: 'Sesión inválida: vuelve a iniciar sesión' });
+        }
+
         const { data: lote, error: errLote } = await consultarLotePorReferencia(lote_id);
         if (errLote || !lote) return res.status(404).json({ error: 'Lote no encontrado' });
 
-        const validacion = validarRegistro(lote.piezas_acumuladas, piezasNuevas, lote.total_piezas_requeridas);
+        if ((lote.estado || '').toLowerCase() === 'cerrado') {
+            return res.status(400).json({ error: 'Registro rechazado: el lote ya está cerrado.' });
+        }
+
+        const validacion = validarRegistro(
+            lote.piezas_acumuladas,
+            piezasNuevas,
+            lote.total_piezas_requeridas
+        );
+
+        if (!validacion.valido) {
+            return res.status(400).json({ error: 'Registro rechazado: datos inválidos.' });
+        }
 
         if (!validacion.valido) return res.status(400).json({ error: 'Registro rechazado: datos inválidos.' });
         if (validacion.excede) return res.status(400).json({ error: 'Registro rechazado: Supera el límite.' });
@@ -332,7 +270,13 @@ app.post('/api/produccion/registrar', async (req, res) => {
             { lote_id: lote.id, usuario_id, piezas_reportadas: piezasNuevas }
         ]);
 
-        if (errInsert) return res.status(500).json({ error: 'Error al guardar el registro' });
+        if (errInsert) {
+            console.error('Error al guardar registro de producción:', errInsert);
+            return res.status(500).json({
+                error: 'Error al guardar el registro',
+                detalle: getSupabaseErrorMessage(errInsert, 'No se pudo insertar en registros_produccion')
+            });
+        }
 
         const nuevoAcumulado = validacion.nuevoAcumulado;
         const nuevoEstado = validacion.completo ? 'cerrado' : 'abierto';
@@ -340,7 +284,14 @@ app.post('/api/produccion/registrar', async (req, res) => {
         if (validacion.completo) cambiosLote.fecha_cierre = new Date().toISOString();
 
         const { data: loteActualizado, error: errUpdate } = await actualizarLoteConEstado(lote.id, cambiosLote, nuevoEstado);
-        if (errUpdate) return res.status(500).json({ error: 'Error al actualizar el lote' });
+
+        if (errUpdate) {
+            console.error('Error al actualizar lote:', errUpdate);
+            return res.status(500).json({
+                error: 'Error al actualizar el lote',
+                detalle: getSupabaseErrorMessage(errUpdate, 'No se pudo actualizar el lote')
+            });
+        }
 
         res.json({
             mensaje: 'Producción registrada',
