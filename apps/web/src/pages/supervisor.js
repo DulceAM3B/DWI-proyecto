@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/router';
 import { apiUrl } from '../lib/api';
 
 function getAuthHeaders() {
@@ -8,6 +9,7 @@ function getAuthHeaders() {
 }
 
 export default function DashboardSupervisor() {
+  const router = useRouter();
   const [lotes, setLotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -66,7 +68,7 @@ export default function DashboardSupervisor() {
         <>
           <header className="header">
             <h1>Dashboard de Supervisión</h1>
-            <button className="btn-reporte">Generar Reporte de Nómina</button>
+            <button className="btn-reporte" onClick={() => router.push('/nomina')}>Generar Reporte de Nómina</button>
           </header>
 
           <form className="crear-lote" onSubmit={(e) => { e.preventDefault(); crearLote(); }}>
